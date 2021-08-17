@@ -92,6 +92,7 @@ END CATCH;
 END;
 EXEC ADD_PRODUCT @pprodid = 1001, @pprodname = 'SmartWatch', @pprice = 50.00;
 EXEC ADD_PRODUCT @pprodid = 2051, @pprodname = 'MobilePhone', @pprice = 850.00;
+EXEC ADD_PRODUCT @pprodid = 1500, @pprodname = 'Laptop', @pprice = 650.00;
 select * from product;
 GO
 /*Procedure 4*/
@@ -165,7 +166,7 @@ BEGIN
 
 BEGIN TRY 
 
-    UPDATE CUSTOMER SET SALES_YTD = @PAMT WHERE CUSTID = @PCUSTID;
+    UPDATE CUSTOMER SET SALES_YTD += @PAMT WHERE CUSTID = @PCUSTID;
     IF @@ROWCOUNT = 0
             THROW 50070, 'Customer ID not found',1
     
@@ -204,10 +205,7 @@ BEGIN
     FROM PRODUCT
     WHERE PRODID = @pprodid
 
-           /* IF @pprodid < 1000 OR @pprodid > 2500
-            THROW 50090, 'Product ID not found', 1 */
-
-                    IF @@ROWCOUNT = 0
+            IF @@ROWCOUNT = 0
             THROW 50090, 'Product ID not found', 1
 
     SET @PReturnString = CONCAT('Prodid:  ', @pprodid, ' Name: ', @Name,' Price: ', @Price, ' Sales: ',@Sales);
@@ -225,12 +223,12 @@ BEGIN
     END CATCH;
 END;
 
- /*anonymous block*/ /*on further testing it wasn't throwing error 50090. Product ID not found, this has now been corrected*/
+ /*anonymous block*/ 
 
     BEGIN
     DECLARE @OUTPUTVALUE NVARCHAR(100)
   
-    EXEC GET_PROD_STRING @pprodid = 2000, @pReturnString = @OUTPUTVALUE OUTPUT;
+    EXEC GET_PROD_STRING @pprodid = 1500, @pReturnString = @OUTPUTVALUE OUTPUT;
     PRINT(@OUTPUTVALUE)
     END;
     
@@ -244,16 +242,14 @@ CREATE PROCEDURE UPD_PROD_SALESYTD @pprodid INT, @pamt MONEY AS
 BEGIN
 
     BEGIN TRY
-           /* IF @pprodid < 1000 OR @pprodid > 2500
-            THROW 50100, 'Product ID not found', 1 */
 
-        UPDATE PRODUCT SET SALES_YTD = @pamt WHERE PRODID = @pprodid 
+        UPDATE PRODUCT SET SALES_YTD += @pamt WHERE PRODID = @pprodid 
+
+            IF @@ROWCOUNT = 0                       
+            THROW 50100, 'Product ID not found', 1 
 
              IF @pamt < -999.99 OR @pamt > 999.99
             THROW 50110, 'Amount out of range', 1
-
-            ELSE IF @@ROWCOUNT = 0                       
-            THROW 50100, 'Product ID not found', 1 
 
     END TRY
 
@@ -268,14 +264,14 @@ BEGIN
             END;                         
     END CATCH;
 END;
-EXEC ADD_PRODUCT @pprodid = 1001, @pprodname = 'SmartWatch', @pprice = 50.00;
-EXEC ADD_PRODUCT @pprodid = 2051, @pprodname = 'MobilePhone', @pprice = 850.00;
-EXEC UPD_PROD_SALESYTD  @pprodid = 2000, @PAMT = 1500; /*on testing both parameters being invalid was only outputting 1 error- amount out of range*/
+--EXEC ADD_PRODUCT @pprodid = 1001, @pprodname = 'SmartWatch', @pprice = 50.00;
+--EXEC ADD_PRODUCT @pprodid = 2051, @pprodname = 'MobilePhone', @pprice = 850.00;
+--EXEC ADD_PRODUCT @pprodid = 1500, @pprodname = 'Laptop', @pprice = 650.00;
+ /*on testing both parameters being invalid was only outputting 1 error- amount out of range*/
+EXEC UPD_PROD_SALESYTD  @pprodid = 1500, @PAMT = 700;
 select * from product;
 
-
-
-/*Procedure 9-NEED TO GET THIS TO WORK*/
+/*Procedure 9*/
 
 DROP PROCEDURE  IF EXISTS UPD_CUSTOMER_STATUS
 
@@ -307,11 +303,140 @@ BEGIN
 END;
 GO
 
-    EXEC UPD_CUSTOMER_STATUS @pcustid = 1, @pstatus = 'SUSPEND';
+EXEC UPD_CUSTOMER_STATUS @pcustid = 1, @pstatus = 'SUSPEND';
 SELECT * FROM CUSTOMER;
 GO
 
+/*Procedure 10*/
+--OK Check if customer status is 'OK'. If not raise an exception.
+--OK Check if quantity value is valid. If not raise an exception.
 
+--Update both the Customer (customer table) and Product SalesYTD (product table)  values 
 
+--Note: 
+--The YTD values must be increased by pqty * the product price
+--@pqty = sales quantity 
+--@prodprice = product price
+
+--Calls UPD_CUST_SALESYTD  and UPD_PROD_SALES_YTD
+
+DROP PROCEDURE IF EXISTS ADD_SIMPLE_SALE
+
+GO;
+CREATE PROCEDURE ADD_SIMPLE_SALE @pcustid INT, @pprodid  INT, @pqty INT AS 
+BEGIN
+
+    BEGIN TRY
+                 DECLARE @prodprice MONEY, @NEWYTDVALUE MONEY /*@prodprice = selling price in product table*/
+                 
+            SELECT @prodprice = SELLING_PRICE, @NEWYTDVALUE = SALES_YTD 
+            FROM PRODUCT
+            WHERE PRODID = @pprodid
+
+            SET @NEWYTDVALUE  = @pqty*@prodprice
+
+ 
+            IF ((SELECT STATUS FROM CUSTOMER WHERE CUSTID = @pcustid) NOT IN ('OK'))
+                THROW 50150, 'Customer status is not OK', 1
+
+             IF ((SELECT COUNT(*) as cnt FROM CUSTOMER WHERE CUSTID = @pcustid)  = 0)
+                THROW 50160, 'Customer ID not found', 1            
+
+            IF @pqty < 1 OR @pqty > 999
+                THROW 50140, 'Sale Quantity outside valid range', 1
+
+                EXEC UPD_CUST_SALESYTD @pcustid = @pcustid, @PAMT = @NEWYTDVALUE /*@pmt used from referenced procedure to set current parameter*/
+                EXEC UPD_PROD_SALESYTD @pprodid = @pprodid, @PAMT = @NEWYTDVALUE /*@pmt used from referenced procedure to set current parameter*/
+
+            END TRY
+
+    BEGIN CATCH
+        if ERROR_NUMBER() IN (50150, 50160, 50140, 50170)
+            THROW
+        ELSE
+            BEGIN
+                DECLARE @ERRORMESSAGE NVARCHAR(MAX) = ERROR_MESSAGE();
+                THROW 50000, @ERRORMESSAGE, 1
+            END; 
+    END CATCH;
+END;
+GO;
+EXEC ADD_SIMPLE_SALE @pcustid=200, @pprodid = 1500,  @pqty = 1
+--select * from product;
+--select * from customer;
+--update customer set sales_ytd = 0;
+--update product set sales_ytd = 0;
+
+EXEC UPD_CUST_SALESYTD @pcustid = 200, @PAMT = 100;
+
+/*Procedure 11*/
+DROP PROCEDURE IF EXISTS SUM_CUSTOMER_SALESYTD
+GO
+
+CREATE PROCEDURE SUM_CUSTOMER_SALESYTD AS 
+BEGIN 
+
+SELECT CAST (SUM(SALES_YTD) AS INT) FROM CUSTOMER AS total
+END
+
+GO 
+EXEC SUM_CUSTOMER_SALESYTD;
+
+--SELECT SALES_YTD FROM CUSTOMER
+
+/*Procedure 12*/
+DROP PROCEDURE IF EXISTS SUM_PRODUCT_SALESYTD
+GO
+
+CREATE PROCEDURE SUM_PRODUCT_SALESYTD AS BEGIN 
+
+SELECT CAST (SUM(SALES_YTD) AS INT) FROM PRODUCT AS total;
+END;
+
+GO
+EXEC SUM_PRODUCT_SALESYTD;
+GO
+
+/*Procedure 13*/
+--***Get all customer details and return as a SYS_REFCURSOR 
+
+--seems like a very long way to select * from cust
+--https://www.sqlservertutorial.net/sql-server-stored-procedures/sql-server-cursor/
+
+DROP PROCEDURE IF EXISTS GET_ALL_CUSTOMERS
+GO
+
+CREATE PROCEDURE GET_ALL_CUSTOMERS @pOutCur CURSOR VARYING OUTPUT AS
+BEGIN 
+    BEGIN TRY
+    SET @pOutCur = CURSOR FOR
+    SELECT * FROM CUSTOMER;
+    OPEN @pOutCur;
+    END TRY  
+
+    BEGIN CATCH
+    DECLARE @ERRORMESSAGE NVARCHAR(MAX) = ERROR_MESSAGE();
+                THROW 50000, @ERRORMESSAGE, 1
+
+    END CATCH;
+END;
+select * from customer
+--Test Cursor output from Customer TABLE- RUN IN FULL FROM LINE 416 TO LINE 431
+BEGIN
+DECLARE @CustOUT as CURSOR; /*declare another variable*/
+DECLARE @ID INT, @NAME NVARCHAR(100),@SALES MONEY, @STATUS NVARCHAR(7); /*declare variables for each of the data fields in table*/
+
+EXEC GET_ALL_CUSTOMERS @pOutCur = @CustOUT OUTPUT;
+
+FETCH NEXT FROM @CustOUT INTO @ID, @NAME, @SALES, @STATUS; /*LIST ALL THE VARIABLES REPRESENTED IN COLUMNS*/
+WHILE @@FETCH_STATUS = 0 /*THIS IS A LOOP*/
+BEGIN 
+PRINT CONCAT ('ID is ',@ID, 'name of customer ', @NAME, 'sales ', @SALES, 'status ', @STATUS);
+FETCH NEXT FROM @CustOUT INTO @ID, @NAME, @SALES, @STATUS;
+END
+
+CLOSE @CustOUT;
+DEALLOCATE @CustOUT;
+END;
 
 
