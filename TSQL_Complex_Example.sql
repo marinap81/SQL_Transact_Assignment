@@ -637,12 +637,10 @@ GO
 --************************************END
 
 --***EXECUTION OF PROCEDURES****
---select * from sale;
 EXEC DELETE_ALL_SALES;
 EXEC DELETE_ALL_PRODUCTS; /*Unable to delete if sales exist*/
 EXEC DELETE_ALL_CUSTOMERS; /*Unable to delete if sales exist*/
 
-GO
 --EXEC ADD_CUSTOMER @pcustid = 450, @pcustname = 'testdude0';
 EXEC ADD_CUSTOMER @pcustid = 1, @pcustname = 'testdude2';
 EXEC ADD_CUSTOMER @pcustid = 200, @pcustname = 'testdude4'; /*added*/
@@ -668,27 +666,21 @@ EXEC ADD_PRODUCT @pprodid = 1400, @pprodname = 'Remote Control', @pprice = 100.0
     END;
  */
 
---EXEC UPD_CUST_SALESYTD  @PCUSTID = 55551, @PAMT = 150;
---EXEC UPD_CUST_SALESYTD  @PCUSTID = 400, @PAMT = 0; 
---EXEC UPD_CUST_SALESYTD @pcustid = 1, @PAMT = 100;
-
-/*anonymous block for GET_PROD_STRING
+/*anonymous block for GET_PROD_STRING */
 GO
     BEGIN
     DECLARE @OUTPUTVALUE NVARCHAR(100)
   
     EXEC GET_PROD_STRING @pprodid = 1500, @pReturnString = @OUTPUTVALUE OUTPUT;
     PRINT(@OUTPUTVALUE)
-    END; */ 
-
-EXEC UPD_PROD_SALESYTD  @pprodid = 1500, @PAMT = 2;
-EXEC UPD_PROD_SALESYTD  @pprodid = 1400, @PAMT = 2;
+    END; 
 
 
---EXEC UPD_CUSTOMER_STATUS @pcustid = 300, @pstatus = 'SUSPEND';
+
+EXEC UPD_CUSTOMER_STATUS @pcustid = 400, @pstatus = 'SUSPEND';
 --EXEC UPD_CUSTOMER_STATUS @pcustid = 5, @pstatus = 'PENDING';
 
---EXEC ADD_SIMPLE_SALE @pcustid=200, @pprodid = 1500,  @pqty = 1;
+EXEC ADD_SIMPLE_SALE @pcustid=200, @pprodid = 1400,  @pqty = 1;
 --EXEC ADD_SIMPLE_SALE @pcustid=300, @pprodid = 1500,  @pqty = 1;
 --EXEC ADD_SIMPLE_SALE @pcustid=1, @pprodid = 1500,  @pqty = 1;
 --EXEC ADD_SIMPLE_SALE @pcustid=300, @pprodid = 1500,  @pqty = 1;
@@ -699,16 +691,7 @@ EXEC UPD_PROD_SALESYTD  @pprodid = 1400, @PAMT = 2;
 --update customer set sales_ytd = 0;
 --update product set sales_ytd = 0;
 
-/*Procedure 8-CORRECTLY SET UP- ONLY SHOWS 1 ERROR MSG AND EXITS IF 2 INVALID PARAMATERS ARE ENTERED*/
 
---Update one product's sales_ytd value in the product table
---Change one product's SALES_YTD value by the pamt value. 
---SALESytd cannot go above 999.99
---FYI=error 'amount out of range' shows up but it still adds the out of range total to the sales ytd
-
-EXEC SUM_CUSTOMER_SALESYTD;
-
-EXEC SUM_PRODUCT_SALESYTD;
 GO
 /*anonymous block for Get_all_customers*/
 BEGIN
@@ -750,7 +733,8 @@ GO
 --select * FROM location;
 EXEC ADD_COMPLEX_SALE @pcustid = 1, @pprodid = 2051, @pqty = 1, @pdate = '01/20/2021';
 
---EXEC ADD_COMPLEX_SALE @pcustid = 5, @pprodid = 1500, @pqty = 1, @pdate = '05/30/2021'; 
+EXEC ADD_COMPLEX_SALE @pcustid = 300, @pprodid = 1400, @pqty = 2, @pdate = '05/30/2021'; 
+EXEC ADD_COMPLEX_SALE @pcustid = 250, @pprodid = 1001, @pqty = 2, @pdate = '06/30/2021'; 
 
 --EXEC ADD_COMPLEX_SALE @pcustid = 5, @pprodid = 1400, @pqty = 3, @pdate = '09/27/2021'; 
 --EXEC ADD_COMPLEX_SALE @pcustid = 200, @pprodid = 1500, @pqty = 1, @pdate = '01/20/2021';
@@ -763,10 +747,14 @@ EXEC ADD_COMPLEX_SALE @pcustid = 1, @pprodid = 2051, @pqty = 1, @pdate = '01/20/
 --Select * from product;
 --select * from location;
 
---update product set sales_ytd = 0;
---delete from sale;
---update customer set sales_ytd = 0;
+GO
 
+/*Anon block for delete_sale */
+BEGIN
+    DECLARE @psaleID BIGINT, @OUTPUTVALUE BIGINT
+        EXEC DELETE_SALE @psaleID =  @OUTPUTVALUE OUTPUT;
+    PRINT CONCAT('The deleted salesID is: ', @OUTPUTVALUE)
+END;
 /*anon block for Get_allsales*/
 GO
 BEGIN
@@ -788,34 +776,7 @@ CLOSE @SalesOUT;
 DEALLOCATE @SalesOUT;
 END;
 
-GO
-/*anon block for count_product_sales
-BEGIN 
-DECLARE @pdays INT, @qtySalesMade INT;
-EXEC COUNT_PRODUCT_SALES @pdays = 300, @returnCount = @qtySalesMade OUTPUT;
-PRINT (CONCAT ('The number of sales made in th last', @pdays,' days is : ', @qtySalesMade));
-END; 
-*/
 
-
-/*Procedure 19 */
---Delete a row from the SALE table
-
---Determine the smallest saleid value in the SALE table, If value is NULL raise a No Sale Rows Found exception
---Otherwise delete a row from the SALE table with the matching sale id- PARTLY DONE NEEDS TO BE COMPLETED
---Calls UPD_CUST_SALES_YTD  and UPD_PROD_SALES_YTD so that the correct amount is subtracted from SALES_YTD
---You must calculate the amount using the PRICE in the SALE table multiplied by the QTY
-
---This function must return the SaleID value of the Sale row that was deleted
---@PRICE- (Price in sale table) * @qty (Quantity Sale Table.)
---@UpdatesSalesYTD MONEY /*(Customer&Product Tables) */
-/*Anon block for delete_sale
-BEGIN
-    DECLARE @psaleID BIGINT, @OUTPUTVALUE BIGINT
-        EXEC DELETE_SALE @psaleID =  @OUTPUTVALUE OUTPUT;
-    PRINT CONCAT('The deleted salesID is: ', @OUTPUTVALUE)
-END;
-*/
 
 /*Procedure 20*/
 --DELETE_ALL_SALES
@@ -824,8 +785,37 @@ END;
 -- this procedure only deleted sales, 
 --it didn't update sales_ytd in either the customer or product table
 
+
 ----EXEC DELETE_PRODUCT @pProdid = 1400;
 
 select * from sale;
 select * from product;
 select * from customer;
+
+EXEC SUM_CUSTOMER_SALESYTD;
+
+EXEC SUM_PRODUCT_SALESYTD;
+
+--EXEC UPD_CUST_SALESYTD  @PCUSTID = 55551, @PAMT = 150;
+--EXEC UPD_CUST_SALESYTD  @PCUSTID = 400, @PAMT = 0; 
+EXEC UPD_CUST_SALESYTD @pcustid = 1, @PAMT = 0;
+
+
+EXEC UPD_PROD_SALESYTD  @pprodid = 1500, @PAMT = 0; 
+/*ONLY SHOWS 1 ERROR MSG AND EXITS IF 2 INVALID PARAMATERS ARE ENTERED*/
+--EXEC UPD_PROD_SALESYTD  @pprodid = 1400, @PAMT = 100;
+
+/*anon block for Count_product_sales */
+GO
+BEGIN 
+DECLARE @pdays INT, @qtySalesMade INT;
+EXEC COUNT_PRODUCT_SALES @pdays = 1, @returnCount = @qtySalesMade OUTPUT;
+PRINT (CONCAT ('The number of sales made in th last', @pdays,' days is : ', @qtySalesMade));
+END; 
+
+GO
+--update product set sales_ytd = 0;
+
+--update customer set sales_ytd = 0;
+
+
